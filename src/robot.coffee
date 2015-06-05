@@ -53,6 +53,7 @@ class Robot
       listener: new Middleware(@)
     @logger     = new Log process.env.HUBOT_LOG_LEVEL or 'info'
     @pingIntervalId = null
+    @globalHttpOptions = {}
 
     @parseVersion()
     if httpd
@@ -122,37 +123,46 @@ class Robot
 
   # Public: Adds a Listener that triggers when anyone enters the room.
   #
+  # options  - An Object of additional parameters keyed on extension name
+  #            (optional).
   # callback - A Function that is called with a Response object.
   #
   # Returns nothing.
-  enter: (callback) ->
+  enter: (options, callback) ->
     @listeners.push new Listener(
       @,
       ((msg) -> msg instanceof EnterMessage),
+      options,
       callback
     )
 
   # Public: Adds a Listener that triggers when anyone leaves the room.
   #
+  # options  - An Object of additional parameters keyed on extension name
+  #            (optional).
   # callback - A Function that is called with a Response object.
   #
   # Returns nothing.
-  leave: (callback) ->
+  leave: (options, callback) ->
     @listeners.push new Listener(
       @,
       ((msg) -> msg instanceof LeaveMessage),
+      options,
       callback
     )
 
   # Public: Adds a Listener that triggers when anyone changes the topic.
   #
+  # options  - An Object of additional parameters keyed on extension name
+  #            (optional).
   # callback - A Function that is called with a Response object.
   #
   # Returns nothing.
-  topic: (callback) ->
+  topic: (options, callback) ->
     @listeners.push new Listener(
       @,
       ((msg) -> msg instanceof TopicMessage),
+      options,
       callback
     )
 
@@ -182,13 +192,22 @@ class Robot
 
   # Public: Adds a Listener that triggers when no other text matchers match.
   #
+  # options  - An Object of additional parameters keyed on extension name
+  #            (optional).
   # callback - A Function that is called with a Response object.
   #
   # Returns nothing.
-  catchAll: (callback) ->
+  catchAll: (options, callback) ->
+    # `options` is optional; need to isolate the real callback before
+    # wrapping it with logic below
+    if not callback?
+      callback = options
+      options = {}
+
     @listeners.push new Listener(
       @,
       ((msg) -> msg instanceof CatchAllMessage),
+      options,
       ((msg) -> msg.message = msg.message.message; callback msg)
     )
 
@@ -545,7 +564,16 @@ class Robot
   #
   # Returns a ScopedClient instance.
   http: (url, options) ->
-    HttpClient.create(url, options)
+    HttpClient.create(url, @extend({}, @globalHttpOptions, options))
       .header('User-Agent', "Hubot/#{@version}")
+
+  # Private: Extend obj with objects passed as additional args.
+  #
+  # Returns the original object with updated changes.
+  extend: (obj, sources...) ->
+    for source in sources
+      obj[key] = value for own key, value of source
+    obj
+
 
 module.exports = Robot
